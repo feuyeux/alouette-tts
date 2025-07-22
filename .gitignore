@@ -134,3 +134,5 @@ test/.test_coverage.dart
 
 dist/
 artifacts/
+
+pubspec.lock

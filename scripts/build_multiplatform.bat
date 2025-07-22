@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 REM Alouette TTS - 跨平台分发包打包脚本 (Windows版本)
@@ -19,9 +20,10 @@ echo.
 
 REM 创建输出目录
 set OUTPUT_DIR=dist
-for /f "tokens=1-4 delims=/ " %%a in ('date /t') do set DATE=%%c%%a%%b
+for /f "tokens=2-4 delims=/ " %%a in ('date /t') do set DATE=%%c%%a%%b
 for /f "tokens=1-2 delims=: " %%a in ('time /t') do set TIME=%%a%%b
 set TIME=!TIME: =0!
+set TIME=!TIME::=!
 set RELEASE_DIR=!OUTPUT_DIR!\release_!VERSION_NAME!_!DATE!_!TIME!
 
 echo 创建输出目录: !RELEASE_DIR!
@@ -180,21 +182,37 @@ if "%BUILD_WINDOWS%"=="true" (
         
         REM 复制Windows文件到输出目录
         if not exist "!RELEASE_DIR!\windows" mkdir "!RELEASE_DIR!\windows"
-        xcopy "build\windows\x64\runner\Release\*" "!RELEASE_DIR!\windows\" /E /I /Y >nul
+        
+        REM 检查源文件是否存在
+        if exist "build\windows\x64\runner\Release\alouette-tts.exe" (
+            echo Copying files from build\windows\x64\runner\Release\...
+            xcopy "build\windows\x64\runner\Release\*" "!RELEASE_DIR!\windows\" /E /I /Y
+            echo Windows files copied successfully
+        ) else (
+            echo ERROR: Could not find built exe file
+            echo Looking for files in build directory...
+            dir "build\windows\x64\runner\" /s
+            goto skip_windows_zip
+        )
         
         REM 创建ZIP压缩包（如果有7z或WinRAR）
-        cd "!RELEASE_DIR!"
+        pushd "!RELEASE_DIR!"
         where 7z >nul 2>&1
         if not errorlevel 1 (
             7z a "alouette-tts-windows-!VERSION_NAME!.zip" windows\ >nul
+            echo 已创建ZIP压缩包
         ) else (
             where winrar >nul 2>&1
             if not errorlevel 1 (
                 winrar a "alouette-tts-windows-!VERSION_NAME!.zip" windows\ >nul
+                echo 已创建ZIP压缩包
+            ) else (
+                echo 注意: 未找到7z或WinRAR，跳过ZIP压缩包创建
             )
         )
-        cd ..
+        popd
         
+        :skip_windows_zip
         REM 生成文件信息
         echo   - windows/ >> "!RELEASE_DIR!\build_info.txt"
         if exist "!RELEASE_DIR!\alouette-tts-windows-!VERSION_NAME!.zip" (
