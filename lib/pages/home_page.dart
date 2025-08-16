@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
-/// TTS主页面
+/// 紧凑版TTS主页面 - 一屏显示所有内容
 class TTSHomePage extends StatefulWidget {
   const TTSHomePage({super.key});
 
@@ -25,6 +25,13 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
+  final List<Map<String, String>> _languages = [
+    {'code': 'zh-CN', 'name': '中文'},
+    {'code': 'en-US', 'name': 'English'},
+    {'code': 'ja-JP', 'name': '日本語'},
+    {'code': 'ko-KR', 'name': '한국어'},
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -34,17 +41,16 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
 
   void _initAnimations() {
     _pulseController = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 1),
       vsync: this,
     );
-    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
   }
 
   Future<void> _initTTS() async {
     try {
-      // 使用 Flutter TTS
       _flutterTts = FlutterTts();
       
       _flutterTts.setStartHandler(() {
@@ -84,30 +90,27 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
     } catch (e) {
       if (mounted) {
         _showError('初始化TTS失败: $e');
-        // 即使失败也设为已初始化，让用户可以尝试使用
         setState(() {
           _isInitialized = true;
         });
       }
     }
   }
-  
+
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: Colors.red.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _pulseController.dispose();
+    _flutterTts.stop();
+    super.dispose();
   }
 
   Future<void> _speak() async {
@@ -136,169 +139,72 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
   }
 
   @override
-  void dispose() {
-    _textController.dispose();
-    _pulseController.dispose();
-    _flutterTts.stop();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: CustomScrollView(
-        slivers: [
-          // 现代化的 App Bar
-          SliverAppBar(
-            expandedHeight: 120,
-            floating: false,
-            pinned: true,
-            backgroundColor: const Color(0xFF6366F1),
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF6366F1),
-                      Color(0xFF8B5CF6),
-                    ],
-                  ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF6366F1),
+              Color(0xFFF8F9FA),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                // 简化标题
+                _buildHeader(),
+                const SizedBox(height: 8),
+                
+                // 主内容区域
+                Expanded(
+                  child: _isInitialized ? _buildMainContent() : _buildLoadingCard(),
                 ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.record_voice_over,
-                            color: Color(0xFF6366F1),
-                            size: 28,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text(
-                                'Alouette TTS',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'Flutter TTS Engine',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              ],
             ),
           ),
-          
-          // 主要内容
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 初始化状态
-                  if (!_isInitialized) _buildLoadingCard(),
-                  
-                  if (_isInitialized) ...[
-                    // 文本输入区域
-                    _buildTextInputCard(),
-                    const SizedBox(height: 20),
-                    
-                    // 语言选择
-                    _buildLanguageCard(),
-                    const SizedBox(height: 20),
-                    
-                    // 控制参数
-                    _buildControlCard(),
-                    const SizedBox(height: 16),
-                    
-                    // 控制按钮
-                    _buildControlButtons(),
-                    const SizedBox(height: 20),
-                    
-                    // 状态显示
-                    _buildStatusCard(),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildLoadingCard() {
+  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: const Column(
+      child: Row(
         children: [
-          CircularProgressIndicator(
-            color: Color(0xFF6366F1),
-            strokeWidth: 3,
-          ),
-          SizedBox(height: 12),
-          Text(
-            '正在初始化TTS服务...',
+          const Icon(Icons.record_voice_over, color: Color(0xFF6366F1), size: 20),
+          const SizedBox(width: 8),
+          const Text(
+            'Alouette TTS',
             style: TextStyle(
-              fontSize: 18,
-              color: Color(0xFF6B7280),
-              fontWeight: FontWeight.w500,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'Flutter TTS',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
             ),
           ),
         ],
@@ -306,79 +212,94 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildTextInputCard() {
+  Widget _buildMainContent() {
+    return Column(
+      children: [
+        // 文本输入区域 - 紧凑版
+        Expanded(
+          flex: 2,
+          child: _buildCompactTextInput(),
+        ),
+        const SizedBox(height: 8),
+        
+        // 控制区域 - 紧凑版
+        _buildCompactControls(),
+        const SizedBox(height: 8),
+        
+        // 播放按钮
+        _buildControlButtons(),
+      ],
+    );
+  }
+
+  Widget _buildCompactTextInput() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    color: const Color(0xFF3B82F6).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
-                    Icons.edit_note,
-                    color: Color(0xFF6366F1),
-                    size: 20,
+                    Icons.edit,
+                    color: Color(0xFF3B82F6),
+                    size: 16,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 const Text(
-                  '输入文本',
+                  '文本输入',
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                     color: Color(0xFF1F2937),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Container(
-              height: 120,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: const Color(0xFFE5E7EB),
-                  width: 1,
-                ),
-              ),
-              child: TextField(
+            const SizedBox(height: 8),
+            Expanded(
+              child:TextField(
                 controller: _textController,
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
+                decoration: InputDecoration(
+                  hintText: '请输入要朗读的文本...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  contentPadding: const EdgeInsets.all(12),
+                  hintStyle: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 14,
+                  ),
+                ),
                 style: const TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFF1F2937),
+                  fontSize: 14,
                   height: 1.4,
                 ),
-                decoration: const InputDecoration(
-                  hintText: '请输入要朗读的文本...',
-                  hintStyle: TextStyle(
-                    color: Color(0xFF9CA3AF),
-                    fontSize: 16,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.all(12),
-                ),
               ),
             ),
           ],
@@ -387,241 +308,131 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildLanguageCard() {
+  Widget _buildCompactControls() {
     return Container(
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
+      child: Column(
+        children: [
+          // 语言选择
+          Row(
+            children: [
+              const Icon(Icons.language, color: Color(0xFF10B981), size: 16),
+              const SizedBox(width: 8),
+              const Text('语言', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  height: 32,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(
-                    Icons.language,
-                    color: Color(0xFF10B981),
-                    size: 20,
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedLanguage,
+                      isExpanded: true,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF374151)),
+                      items: _languages.map((lang) {
+                        return DropdownMenuItem<String>(
+                          value: lang['code'],
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(lang['name']!),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) async {
+                        if (value != null) {
+                          setState(() => _selectedLanguage = value);
+                          await _flutterTts.setLanguage(value);
+                        }
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  '语言选择',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F2937),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFE5E7EB),
-                  width: 1,
                 ),
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedLanguage,
-                  isExpanded: true,
-                  icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF6B7280)),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF1F2937),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'zh-CN', child: Text('🇨🇳 中文 (简体)')),
-                    DropdownMenuItem(value: 'zh-TW', child: Text('🇹🇼 中文 (繁體)')),
-                    DropdownMenuItem(value: 'en-US', child: Text('🇺🇸 English (US)')),
-                    DropdownMenuItem(value: 'en-GB', child: Text('🇬🇧 English (UK)')),
-                    DropdownMenuItem(value: 'ja-JP', child: Text('🇯🇵 日本語')),
-                    DropdownMenuItem(value: 'ko-KR', child: Text('🇰🇷 한국어')),
-                  ],
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        _selectedLanguage = newValue;
-                      });
-                    }
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          
+          // 语速控制
+          _buildSliderRow('语速', _speechRate, 0.3, 2.0, Icons.speed, (value) async {
+            setState(() => _speechRate = value);
+            await _flutterTts.setSpeechRate(value);
+          }),
+          
+          // 音量控制
+          _buildSliderRow('音量', _volume, 0.0, 1.0, Icons.volume_up, (value) async {
+            setState(() => _volume = value);
+            await _flutterTts.setVolume(value);
+          }),
+          
+          // 音调控制
+          _buildSliderRow('音调', _pitch, 0.5, 2.0, Icons.tune, (value) async {
+            setState(() => _pitch = value);
+            await _flutterTts.setPitch(value);
+          }),
+        ],
       ),
     );
   }
 
-  Widget _buildControlCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.tune,
-                    color: Color(0xFFF59E0B),
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  '朗读参数',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F2937),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _buildSlider(
-              icon: Icons.speed,
-              label: '语速',
-              value: _speechRate,
-              min: 0.1,
-              max: 2.0,
-              divisions: 19,
-              format: (value) => '${(value * 100).round()}%',
-              onChanged: (value) async {
-                setState(() => _speechRate = value);
-                await _flutterTts.setSpeechRate(value);
-              },
-            ),
-            const SizedBox(height: 16),
-            _buildSlider(
-              icon: Icons.volume_up,
-              label: '音量',
-              value: _volume,
-              min: 0.0,
-              max: 1.0,
-              divisions: 10,
-              format: (value) => '${(value * 100).round()}%',
-              onChanged: (value) async {
-                setState(() => _volume = value);
-                await _flutterTts.setVolume(value);
-              },
-            ),
-            const SizedBox(height: 16),
-            _buildSlider(
-              icon: Icons.graphic_eq,
-              label: '音调',
-              value: _pitch,
-              min: 0.5,
-              max: 2.0,
-              divisions: 15,
-              format: (value) => '${value.toStringAsFixed(1)}x',
-              onChanged: (value) async {
-                setState(() => _pitch = value);
-                await _flutterTts.setPitch(value);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSlider({
-    required IconData icon,
-    required String label,
-    required double value,
-    required double min,
-    required double max,
-    required int divisions,
-    required String Function(double) format,
-    required void Function(double) onChanged,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, color: const Color(0xFF6B7280), size: 20),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 50,
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF6B7280),
-              fontWeight: FontWeight.w500,
+  Widget _buildSliderRow(
+    String label,
+    double value,
+    double min,
+    double max,
+    IconData icon,
+    Function(double) onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF6B7280), size: 14),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 30,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
             ),
           ),
-        ),
-        Expanded(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: const Color(0xFF6366F1),
-              inactiveTrackColor: const Color(0xFFE5E7EB),
-              thumbColor: const Color(0xFF6366F1),
-              overlayColor: const Color(0xFF6366F1).withOpacity(0.1),
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-              trackHeight: 4,
-            ),
+          Expanded(
             child: Slider(
               value: value,
               min: min,
               max: max,
-              divisions: divisions,
+              divisions: 20,
+              activeColor: const Color(0xFF6366F1),
               onChanged: onChanged,
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 50,
-          child: Text(
-            format(value),
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF1F2937),
-              fontWeight: FontWeight.w600,
+          SizedBox(
+            width: 35,
+            child: Text(
+              value.toStringAsFixed(1),
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF374151),
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.end,
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -635,7 +446,7 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
               return Transform.scale(
                 scale: _isPlaying ? _pulseAnimation.value : 1.0,
                 child: Container(
-                  height: 48,
+                  height: 44,
                   decoration: BoxDecoration(
                     gradient: _isPlaying
                         ? const LinearGradient(
@@ -644,12 +455,12 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
                         : const LinearGradient(
                             colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
                           ),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
                         color: (_isPlaying ? const Color(0xFFEF4444) : const Color(0xFF6366F1))
                             .withOpacity(0.3),
-                        blurRadius: 12,
+                        blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
                     ],
@@ -657,22 +468,22 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
                       onTap: _isPlaying ? _stop : _speak,
-                      borderRadius: BorderRadius.circular(16),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             _isPlaying ? Icons.stop : Icons.play_arrow,
                             color: Colors.white,
-                            size: 24,
+                            size: 20,
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            _isPlaying ? '停止朗读' : '开始朗读',
+                            _isPlaying ? '停止' : '播放',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 16,
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -689,62 +500,45 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildStatusCard() {
+  Widget _buildLoadingCard() {
     return Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _isPlaying
-            ? const Color(0xFF10B981).withOpacity(0.1)
-            : const Color(0xFF6B7280).withOpacity(0.1),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _isPlaying
-              ? const Color(0xFF10B981).withOpacity(0.3)
-              : const Color(0xFF6B7280).withOpacity(0.3),
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: _isPlaying ? _pulseAnimation.value : 1.0,
-                  child: Icon(
-                    _isPlaying ? Icons.volume_up : Icons.volume_off,
-                    color: _isPlaying ? const Color(0xFF10B981) : const Color(0xFF6B7280),
-                    size: 24,
-                  ),
-                );
-              },
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+            strokeWidth: 3,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            '正在初始化TTS引擎...',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF374151),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _isPlaying ? '正在朗读中...' : '等待朗读',
-                    style: TextStyle(
-                      color: _isPlaying ? const Color(0xFF10B981) : const Color(0xFF6B7280),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '语言: $_selectedLanguage | 引擎: Flutter TTS',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF9CA3AF),
-                    ),
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '请稍候片刻',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
