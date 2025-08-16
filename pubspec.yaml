@@ -1,4 +1,4 @@
-name: alouette_tts
+name: alouette_tts_app
 description: "Alouette TTS - A text-to-speech Flutter application."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -35,8 +35,12 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
-  # Flutter Text-to-Speech plugin
-  flutter_tts: ^4.2.3
+  # Direct flutter_tts dependency for simplified implementation
+  flutter_tts: ^4.0.2
+
+  # Local dependency on alouette-lib-tts
+  alouette_tts:
+    path: ../alouette-lib-tts
 
 dev_dependencies:
   flutter_test:

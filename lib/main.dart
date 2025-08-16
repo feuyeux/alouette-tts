@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'pages/tts_home_page.dart';
+import 'pages/home_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const AlouetteTTSApp());
 }
 
