@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:alouette_tts/main.dart';
+import 'package:alouette_tts_app/main.dart';
 
 void main() {
   testWidgets('应用程序加载测试', (WidgetTester tester) async {

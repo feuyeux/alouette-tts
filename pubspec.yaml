@@ -39,7 +39,7 @@ dependencies:
   flutter_tts: ^4.0.2
 
   # Local dependency on alouette-lib-tts
-  alouette_tts:
+  alouette_lib_tts:
     path: ../alouette-lib-tts
 
 dev_dependencies:

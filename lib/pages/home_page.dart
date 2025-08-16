@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:alouette_lib_tts/alouette_tts.dart';
 
 /// 紧凑版TTS主页面 - 一屏显示所有内容
 class TTSHomePage extends StatefulWidget {
@@ -10,7 +10,7 @@ class TTSHomePage extends StatefulWidget {
 }
 
 class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin {
-  late FlutterTts _flutterTts;
+  late AlouetteTTSService _ttsService;
   final TextEditingController _textController = TextEditingController(
     text: '你好，我可以为你朗读。Hello, I can read for you.',
   );
@@ -51,36 +51,40 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
 
   Future<void> _initTTS() async {
     try {
-      _flutterTts = FlutterTts();
+      // First register services in the service locator
+      await ServiceLocator.registerServices();
       
-      _flutterTts.setStartHandler(() {
-        if (mounted) {
-          setState(() => _isPlaying = true);
-          _pulseController.repeat(reverse: true);
-        }
-      });
+      _ttsService = AlouetteTTSService();
       
-      _flutterTts.setCompletionHandler(() {
-        if (mounted) {
-          setState(() => _isPlaying = false);
-          _pulseController.stop();
-          _pulseController.reset();
-        }
-      });
-      
-      _flutterTts.setErrorHandler((msg) {
-        if (mounted) {
-          setState(() => _isPlaying = false);
-          _pulseController.stop();
-          _pulseController.reset();
-          _showError('TTS Error: $msg');
-        }
-      });
-      
-      await _flutterTts.setLanguage(_selectedLanguage);
-      await _flutterTts.setSpeechRate(_speechRate);
-      await _flutterTts.setVolume(_volume);
-      await _flutterTts.setPitch(_pitch);
+      await _ttsService.initialize(
+        onStart: () {
+          if (mounted) {
+            setState(() => _isPlaying = true);
+            _pulseController.repeat(reverse: true);
+          }
+        },
+        onComplete: () {
+          if (mounted) {
+            setState(() => _isPlaying = false);
+            _pulseController.stop();
+            _pulseController.reset();
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            setState(() => _isPlaying = false);
+            _pulseController.stop();
+            _pulseController.reset();
+            _showError('TTS Error: $error');
+          }
+        },
+        config: AlouetteTTSConfig(
+          languageCode: _selectedLanguage,
+          speechRate: _speechRate,
+          volume: _volume,
+          pitch: _pitch,
+        ),
+      );
       
       if (mounted) {
         setState(() {
@@ -109,7 +113,7 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
   void dispose() {
     _textController.dispose();
     _pulseController.dispose();
-    _flutterTts.stop();
+    _ttsService.dispose();
     super.dispose();
   }
 
@@ -120,7 +124,13 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
     }
 
     try {
-      await _flutterTts.speak(_textController.text);
+      final config = AlouetteTTSConfig(
+        languageCode: _selectedLanguage,
+        speechRate: _speechRate,
+        volume: _volume,
+        pitch: _pitch,
+      );
+      await _ttsService.speak(_textController.text, config: config);
     } catch (e) {
       _showError('播放失败: $e');
     }
@@ -130,7 +140,7 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
     if (!_isInitialized) return;
     
     try {
-      await _flutterTts.stop();
+      await _ttsService.stop();
     } catch (e) {
       if (mounted) {
         _showError('停止失败: $e');
@@ -201,7 +211,7 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
           ),
           const Spacer(),
           Text(
-            'Flutter TTS',
+            'Edge TTS',
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey[600],
@@ -355,7 +365,15 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
                       onChanged: (value) async {
                         if (value != null) {
                           setState(() => _selectedLanguage = value);
-                          await _flutterTts.setLanguage(value);
+                          if (_isInitialized) {
+                            final config = AlouetteTTSConfig(
+                              languageCode: value,
+                              speechRate: _speechRate,
+                              volume: _volume,
+                              pitch: _pitch,
+                            );
+                            await _ttsService.updateConfig(config);
+                          }
                         }
                       },
                     ),
@@ -369,19 +387,43 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
           // 语速控制
           _buildSliderRow('语速', _speechRate, 0.3, 2.0, Icons.speed, (value) async {
             setState(() => _speechRate = value);
-            await _flutterTts.setSpeechRate(value);
+            if (_isInitialized) {
+              final config = AlouetteTTSConfig(
+                languageCode: _selectedLanguage,
+                speechRate: value,
+                volume: _volume,
+                pitch: _pitch,
+              );
+              await _ttsService.updateConfig(config);
+            }
           }),
           
           // 音量控制
           _buildSliderRow('音量', _volume, 0.0, 1.0, Icons.volume_up, (value) async {
             setState(() => _volume = value);
-            await _flutterTts.setVolume(value);
+            if (_isInitialized) {
+              final config = AlouetteTTSConfig(
+                languageCode: _selectedLanguage,
+                speechRate: _speechRate,
+                volume: value,
+                pitch: _pitch,
+              );
+              await _ttsService.updateConfig(config);
+            }
           }),
           
           // 音调控制
           _buildSliderRow('音调', _pitch, 0.5, 2.0, Icons.tune, (value) async {
             setState(() => _pitch = value);
-            await _flutterTts.setPitch(value);
+            if (_isInitialized) {
+              final config = AlouetteTTSConfig(
+                languageCode: _selectedLanguage,
+                speechRate: _speechRate,
+                volume: _volume,
+                pitch: value,
+              );
+              await _ttsService.updateConfig(config);
+            }
           }),
         ],
       ),

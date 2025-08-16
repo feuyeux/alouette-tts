@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:alouette_lib_tts/alouette_tts.dart';
 import 'pages/home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 初始化服务定位器
+  await ServiceLocator.registerServices();
+  
   runApp(const AlouetteTTSApp());
 }
 
