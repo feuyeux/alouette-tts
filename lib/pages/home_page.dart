@@ -9,77 +9,75 @@ class TTSHomePage extends StatefulWidget {
   State<TTSHomePage> createState() => _TTSHomePageState();
 }
 
-class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin {
+class _TTSHomePageState extends State<TTSHomePage> {
   late AlouetteTTSService _ttsService;
-  final TextEditingController _textController = TextEditingController(
-    text: '你好，我可以为你朗读。Hello, I can read for you.',
-  );
 
-  bool _isPlaying = false;
+  // 12 row controllers and per-row playing state
+  final List<String> _sampleTexts = [
+    '你好，我可以为你朗读。',
+    'Hello, I can read for you.',
+    'Hallo, ich kann es für dich vorlesen.',
+    'Bonjour, je peux vous lire ce texte.',
+    'Hola, puedo leer esto para ti.',
+    'Ciao, posso leggerlo per te.',
+    'Здравствуйте, я могу прочитать это для вас.',
+    'Γεια σας, μπορώ να το διαβάσω για εσάς.',
+    'مرحبًا، أستطيع قراءة هذا لك.',
+    'नमस्ते, मैं आपके लिए इसे पढ़ कर सुना सकता हूँ.',
+    'こんにちは、これを読み上げることができます。',
+    '안녕하세요, 제가 읽어 드릴 수 있습니다.',
+  ];
+
+  late final List<TextEditingController> _controllers;
+  final List<bool> _rowIsPlaying = List.filled(12, false);
+
   bool _isInitialized = false;
   double _speechRate = 1.0;
   double _volume = 1.0;
   double _pitch = 1.0;
-  String _selectedLanguage = 'zh-CN';
-  
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
 
+  // Per-row languages (one per row)
   final List<Map<String, String>> _languages = [
-    {'code': 'zh-CN', 'name': '中文'},
-    {'code': 'en-US', 'name': 'English'},
-    {'code': 'ja-JP', 'name': '日本語'},
-    {'code': 'ko-KR', 'name': '한국어'},
+    {'code': 'zh-cn', 'name': '中文'},
+    {'code': 'en-us', 'name': 'English'},
+    {'code': 'de-de', 'name': 'Deutsch'},
+    {'code': 'fr-fr', 'name': 'Français'},
+    {'code': 'es-es', 'name': 'Español'},
+    {'code': 'it-it', 'name': 'Italiano'},
+    {'code': 'ru-ru', 'name': 'Русский'},
+    {'code': 'el-gr', 'name': 'Ελληνικά'},
+    {'code': 'ar-sa', 'name': 'العربية'},
+    {'code': 'hi-in', 'name': 'हिन्दी'},
+    {'code': 'ja-jp', 'name': '日本語'},
+    {'code': 'ko-kr', 'name': '한국어'},
   ];
 
   @override
   void initState() {
     super.initState();
-    _initAnimations();
+    // initialize controllers from sample texts
+    _controllers = List.generate(12, (i) => TextEditingController(text: _sampleTexts[i]));
     _initTTS();
-  }
-
-  void _initAnimations() {
-    _pulseController = AnimationController(
-      duration: const Duration(seconds: 1),
-      vsync: this,
-    );
-    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
   }
 
   Future<void> _initTTS() async {
     try {
-      // First register services in the service locator
-      await ServiceLocator.registerServices();
-      
+      // Create TTS service directly without ServiceLocator
       _ttsService = AlouetteTTSService();
       
-      await _ttsService.initialize(
+    await _ttsService.initialize(
         onStart: () {
-          if (mounted) {
-            setState(() => _isPlaying = true);
-            _pulseController.repeat(reverse: true);
-          }
+          // We handle per-row playing state locally when user taps a row's play button.
         },
-        onComplete: () {
-          if (mounted) {
-            setState(() => _isPlaying = false);
-            _pulseController.stop();
-            _pulseController.reset();
-          }
-        },
+        onComplete: () {},
         onError: (error) {
           if (mounted) {
-            setState(() => _isPlaying = false);
-            _pulseController.stop();
-            _pulseController.reset();
             _showError('TTS Error: $error');
           }
         },
         config: AlouetteTTSConfig(
-          languageCode: _selectedLanguage,
+          // default language for engine initialization - use first sample language
+          languageCode: _languages.first['code']!,
           speechRate: _speechRate,
           volume: _volume,
           pitch: _pitch,
@@ -95,7 +93,8 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
       if (mounted) {
         _showError('初始化TTS失败: $e');
         setState(() {
-          _isInitialized = true;
+          // Leave as not initialized on failure so UI won't allow playback
+          _isInitialized = false;
         });
       }
     }
@@ -111,40 +110,51 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
 
   @override
   void dispose() {
-    _textController.dispose();
-    _pulseController.dispose();
+    for (final c in _controllers) {
+      c.dispose();
+    }
     _ttsService.dispose();
     super.dispose();
   }
+  Future<void> _speakRow(int idx) async {
+    if (!_isInitialized) {
+      _showError('TTS 引擎未初始化');
+      return;
+    }
 
-  Future<void> _speak() async {
-    if (_textController.text.isEmpty) {
+    final text = _controllers[idx].text.trim();
+    if (text.isEmpty) {
       _showError('请输入要朗读的文本');
       return;
     }
 
+    setState(() => _rowIsPlaying[idx] = true);
     try {
+      final lang = _languages[idx]['code']!;
       final config = AlouetteTTSConfig(
-        languageCode: _selectedLanguage,
+        languageCode: lang,
         speechRate: _speechRate,
         volume: _volume,
         pitch: _pitch,
       );
-      await _ttsService.speak(_textController.text, config: config);
+      await _ttsService.speak(text, config: config);
     } catch (e) {
       _showError('播放失败: $e');
+    } finally {
+      if (mounted) setState(() => _rowIsPlaying[idx] = false);
     }
   }
 
-  Future<void> _stop() async {
+  Future<void> _stopAll() async {
     if (!_isInitialized) return;
-    
     try {
       await _ttsService.stop();
     } catch (e) {
-      if (mounted) {
-        _showError('停止失败: $e');
-      }
+      if (mounted) _showError('停止失败: $e');
+    } finally {
+      if (mounted) setState(() {
+        for (var i = 0; i < _rowIsPlaying.length; i++) _rowIsPlaying[i] = false;
+      });
     }
   }
 
@@ -157,14 +167,15 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF6366F1),
-              Color(0xFFF8F9FA),
+              Color(0xFF000000),
+              Color(0xFFFFFFFF),
             ],
           ),
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            // reduce bottom padding slightly to avoid leaving a large blank area
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: Column(
               children: [
                 // 简化标题
@@ -187,7 +198,7 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -199,12 +210,12 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
       ),
       child: Row(
         children: [
-          const Icon(Icons.record_voice_over, color: Color(0xFF6366F1), size: 20),
+      const Icon(Icons.record_voice_over, color: Color(0xFFFBBF24), size: 24),
           const SizedBox(width: 8),
           const Text(
             'Alouette TTS',
             style: TextStyle(
-              fontSize: 16,
+        fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1F2937),
             ),
@@ -213,8 +224,8 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
           Text(
             'Edge TTS',
             style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
+        fontSize: 14,
+              color: Colors.black,
             ),
           ),
         ],
@@ -223,26 +234,29 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
   }
 
   Widget _buildMainContent() {
-    return Column(
-      children: [
-        // 文本输入区域 - 紧凑版
-        Expanded(
-          flex: 2,
-          child: _buildCompactTextInput(),
-        ),
-        const SizedBox(height: 8),
-        
-        // 控制区域 - 紧凑版
-        _buildCompactControls(),
-        const SizedBox(height: 8),
-        
-        // 播放按钮
-        _buildControlButtons(),
-      ],
+    // Make the main content scrollable so all components remain accessible
+    // on small windows. GridView and controls are kept compact; outer
+    // SingleChildScrollView allows vertical scrolling when necessary.
+    return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildRowsList(),
+          const SizedBox(height: 6),
+          _buildCompactControls(),
+          // removed extra bottom spacer to avoid leaving blank area at screen bottom
+        ],
+      ),
     );
   }
 
   Widget _buildCompactTextInput() {
+    // Deprecated - kept for compatibility if needed
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildRowsList() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -256,74 +270,133 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.edit,
-                    color: Color(0xFF3B82F6),
-                    size: 16,
-                  ),
+        padding: const EdgeInsets.all(6),
+        child: LayoutBuilder(builder: (context, constraints) {
+            // Use 2 columns and compute a compact childAspectRatio so items try to fit
+            // within the available height. Also derive a reasonable maxLines for
+            // the TextField based on computed tile height to avoid long text fields
+            // that push content off-screen.
+            final int itemCount = _controllers.length;
+            final int columns = 2;
+            final int rows = (itemCount + columns - 1) ~/ columns;
+            const double mainAxisSpacing = 2.0;
+            const double crossAxisSpacing = 2.0;
+
+            final double availableHeight = constraints.maxHeight - (rows - 1) * mainAxisSpacing;
+            final double tileHeight = rows > 0 ? (availableHeight / rows) : 100.0;
+            // Prevent tiles from becoming excessively tall; cap at a reasonable
+            // maximum so the content (label + one-line input + button) isn't
+            // left with a large blank area below.
+            // Increase max tile height to accommodate larger fonts and avoid
+            // line-wrapping or clipping when text is bigger for readability.
+            const double maxTileHeight = 78.0;
+            final double effectiveTileHeight = tileHeight.clamp(0.0, maxTileHeight);
+            final double availableWidth = constraints.maxWidth - (columns - 1) * crossAxisSpacing;
+            final double tileWidth = availableWidth / columns;
+
+            // Compute aspect ratio, clamp to sane values to avoid extremities on very
+            // small or very large screens.
+            double aspectRatio = tileWidth / effectiveTileHeight;
+            // Allow much larger aspect ratios on wide screens so tile height
+            // stays close to the effectiveTileHeight and doesn't create big
+            // blank areas under content.
+            aspectRatio = aspectRatio.clamp(1.6, 12.0);
+
+            final TextStyle labelTextStyle = const TextStyle(fontSize: 13, fontWeight: FontWeight.w800);
+            double maxLabelWidth = 0.0;
+            final TextDirection td = Directionality.of(context);
+            for (final lang in _languages) {
+              final tp = TextPainter(
+                text: TextSpan(text: lang['name']!, style: labelTextStyle),
+                textDirection: td,
+                maxLines: 1,
+              );
+              tp.layout();
+              if (tp.width > maxLabelWidth) maxLabelWidth = tp.width;
+            }
+            final double labelBoxWidth = maxLabelWidth + 15.0;
+        return GridView.count(
+          crossAxisCount: columns,
+          childAspectRatio: aspectRatio,
+          mainAxisSpacing: mainAxisSpacing,
+          crossAxisSpacing: crossAxisSpacing,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+              children: List.generate(_controllers.length, (index) {
+              final lang = _languages[index];
+              return Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(width: 8),
-                const Text(
-                  '文本输入',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1F2937),
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: labelBoxWidth,
+                          child: Container(
+                            // keep only vertical padding to avoid increasing the fixed width
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFBBF24),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(lang['name']!, style: labelTextStyle.copyWith(color: Colors.black), textAlign: TextAlign.center),
+                          ),
+                        ),
+                        const Spacer(),
+                        SizedBox(
+                          width: 44,
+                          height: 34,
+                          child: ElevatedButton(
+                            onPressed: _rowIsPlaying[index] ? () => _stopAll() : () => _speakRow(index),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _rowIsPlaying[index] ? const Color(0xFF000000) : const Color(0xFFFBBF24),
+                              padding: EdgeInsets.zero,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                            child: Icon(_rowIsPlaying[index] ? Icons.stop : Icons.play_arrow, size: 18, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                        SizedBox(
+                        // increase input height for readability
+                        height: 30,
+                        child: TextField(
+                          controller: _controllers[index],
+                          maxLines: 1,
+                          textAlignVertical: TextAlignVertical.center,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          ),
+                          style: const TextStyle(fontSize: 14, height: 1.0, color: Colors.black),
+                        ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child:TextField(
-                controller: _textController,
-                maxLines: null,
-                expands: true,
-                textAlignVertical: TextAlignVertical.top,
-                decoration: InputDecoration(
-                  hintText: '请输入要朗读的文本...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: const Color(0xFFF9FAFB),
-                  contentPadding: const EdgeInsets.all(12),
-                  hintStyle: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 14,
-                  ),
-                ),
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ],
-        ),
+              );
+            }),
+          );
+        }),
       ),
     );
   }
 
   Widget _buildCompactControls() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -332,100 +405,29 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
           ),
         ],
       ),
-      child: Column(
-        children: [
-          // 语言选择
-          Row(
-            children: [
-              const Icon(Icons.language, color: Color(0xFF10B981), size: 16),
-              const SizedBox(width: 8),
-              const Text('语言', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedLanguage,
-                      isExpanded: true,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF374151)),
-                      items: _languages.map((lang) {
-                        return DropdownMenuItem<String>(
-                          value: lang['code'],
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(lang['name']!),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) async {
-                        if (value != null) {
-                          setState(() => _selectedLanguage = value);
-                          if (_isInitialized) {
-                            final config = AlouetteTTSConfig(
-                              languageCode: value,
-                              speechRate: _speechRate,
-                              volume: _volume,
-                              pitch: _pitch,
-                            );
-                            await _ttsService.updateConfig(config);
-                          }
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+          // language selection removed — per-row languages are fixed
           
           // 语速控制
           _buildSliderRow('语速', _speechRate, 0.3, 2.0, Icons.speed, (value) async {
             setState(() => _speechRate = value);
-            if (_isInitialized) {
-              final config = AlouetteTTSConfig(
-                languageCode: _selectedLanguage,
-                speechRate: value,
-                volume: _volume,
-                pitch: _pitch,
-              );
-              await _ttsService.updateConfig(config);
-            }
           }),
           
           // 音量控制
           _buildSliderRow('音量', _volume, 0.0, 1.0, Icons.volume_up, (value) async {
             setState(() => _volume = value);
-            if (_isInitialized) {
-              final config = AlouetteTTSConfig(
-                languageCode: _selectedLanguage,
-                speechRate: _speechRate,
-                volume: value,
-                pitch: _pitch,
-              );
-              await _ttsService.updateConfig(config);
-            }
           }),
           
           // 音调控制
           _buildSliderRow('音调', _pitch, 0.5, 2.0, Icons.tune, (value) async {
             setState(() => _pitch = value);
-            if (_isInitialized) {
-              final config = AlouetteTTSConfig(
-                languageCode: _selectedLanguage,
-                speechRate: _speechRate,
-                volume: _volume,
-                pitch: value,
-              );
-              await _ttsService.updateConfig(config);
-            }
           }),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -439,16 +441,16 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
     Function(double) onChanged,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF6B7280), size: 14),
+          Icon(icon, color: const Color(0xFFFBBF24), size: 14),
           const SizedBox(width: 6),
           SizedBox(
             width: 30,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+              style: const TextStyle(fontSize: 10, color: Color(0xFF000000)),
             ),
           ),
           Expanded(
@@ -457,7 +459,7 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
               min: min,
               max: max,
               divisions: 20,
-              activeColor: const Color(0xFF6366F1),
+              activeColor: const Color(0xFFFBBF24),
               onChanged: onChanged,
             ),
           ),
@@ -467,7 +469,7 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
               value.toStringAsFixed(1),
               style: const TextStyle(
                 fontSize: 11,
-                color: Color(0xFF374151),
+                color: Color(0xFF000000),
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.end,
@@ -478,69 +480,7 @@ class _TTSHomePageState extends State<TTSHomePage> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildControlButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: AnimatedBuilder(
-            animation: _pulseAnimation,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: _isPlaying ? _pulseAnimation.value : 1.0,
-                child: Container(
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: _isPlaying
-                        ? const LinearGradient(
-                            colors: [Color(0xFFEF4444), Color(0xFFF87171)],
-                          )
-                        : const LinearGradient(
-                            colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                          ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (_isPlaying ? const Color(0xFFEF4444) : const Color(0xFF6366F1))
-                            .withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: _isPlaying ? _stop : _speak,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _isPlaying ? Icons.stop : Icons.play_arrow,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _isPlaying ? '停止' : '播放',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
+  // Removed global play animation and single play button; per-row controls are used.
 
   Widget _buildLoadingCard() {
     return Container(
