@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:alouette_lib_tts/alouette_tts.dart';
 
-/// 紧凑版TTS主页面 - 一屏显示所有内容，优化了UI抖动问题
+/// 紧凑版TTS主页面 - 一屏显示所有内容
 class TTSHomePage extends StatefulWidget {
   const TTSHomePage({super.key});
 
@@ -92,32 +92,29 @@ class _TTSHomePageState extends State<TTSHomePage> {
     } catch (e) {
       if (mounted) {
         _showError('初始化TTS失败: $e');
+        setState(() {
+          // Leave as not initialized on failure so UI won't allow playback
+          _isInitialized = false;
+        });
       }
     }
   }
 
-  @override
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
+
+    @override
   void dispose() {
     for (var controller in _controllers) {
       controller.dispose();
     }
     _ttsService.dispose();
     super.dispose();
-  }
-
-  void _showError(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
-    }
   }
 
   Future<void> _playRowTTS(int rowIndex, String text, String languageCode) async {
@@ -233,12 +230,9 @@ class _TTSHomePageState extends State<TTSHomePage> {
       await _ttsService.stop();
     } catch (e) {
       if (mounted) _showError('停止失败: $e');
-    }
-    if (mounted) {
-      setState(() {
-        for (int i = 0; i < _rowIsPlaying.length; i++) {
-          _rowIsPlaying[i] = false;
-        }
+    } finally {
+      if (mounted) setState(() {
+        for (var i = 0; i < _rowIsPlaying.length; i++) _rowIsPlaying[i] = false;
       });
     }
   }
@@ -259,13 +253,13 @@ class _TTSHomePageState extends State<TTSHomePage> {
         ),
         child: SafeArea(
           child: Padding(
-            // 进一步减少padding让内容更紧凑
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4), // 减少所有边距
+            // reduce bottom padding slightly to avoid leaving a large blank area
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: Column(
               children: [
                 // 简化标题
                 _buildHeader(),
-                const SizedBox(height: 4), // 减少标题与内容间距
+                const SizedBox(height: 8),
                 
                 // 主内容区域
                 Expanded(
@@ -281,33 +275,35 @@ class _TTSHomePageState extends State<TTSHomePage> {
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), // 减少padding
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10), // 稍微减少圆角
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 6, // 减少模糊半径
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         children: [
+      const Icon(Icons.record_voice_over, color: Color(0xFFFBBF24), size: 24),
+          const SizedBox(width: 8),
           const Text(
             'Alouette TTS',
             style: TextStyle(
-              fontSize: 18, // 稍微减少字体大小
+        fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1F2937),
             ),
           ),
           const Spacer(),
-          const Text(
+          Text(
             'Edge TTS',
             style: TextStyle(
-              fontSize: 14,
+        fontSize: 14,
               color: Colors.black,
             ),
           ),
@@ -317,20 +313,26 @@ class _TTSHomePageState extends State<TTSHomePage> {
   }
 
   Widget _buildMainContent() {
-    return Column( // 移除SingleChildScrollView，使用固定布局
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded( // 让语言列表占用大部分空间
-          flex: 3, // 分配3/4的空间给语言列表
-          child: _buildRowsList(),
-        ),
-        const SizedBox(height: 8),
-        Expanded( // 让控制面板占用剩余空间
-          flex: 1, // 分配1/4的空间给控制面板
-          child: _buildCompactControls(),
-        ),
-      ],
+    // Make the main content scrollable so all components remain accessible
+    // on small windows. GridView and controls are kept compact; outer
+    // SingleChildScrollView allows vertical scrolling when necessary.
+    return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildRowsList(),
+          const SizedBox(height: 6),
+          _buildCompactControls(),
+          // removed extra bottom spacer to avoid leaving blank area at screen bottom
+        ],
+      ),
     );
+  }
+
+  Widget _buildCompactTextInput() {
+    // Deprecated - kept for compatibility if needed
+    return const SizedBox.shrink();
   }
 
   Widget _buildRowsList() {
@@ -351,13 +353,13 @@ class _TTSHomePageState extends State<TTSHomePage> {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(4), // 减少padding从6到4
+        padding: const EdgeInsets.all(6),
         child: GridView.count(
           crossAxisCount: 2, // 固定2列
-          childAspectRatio: 6.0, // 合理的宽高比让内容充满空间
-          mainAxisSpacing: 4.0, // 合理的间距
-          crossAxisSpacing: 6.0, // 合理的间距
-          shrinkWrap: false, // 不收缩，充满父容器
+          childAspectRatio: 3.2, // 固定宽高比，避免动态计算
+          mainAxisSpacing: 4.0,
+          crossAxisSpacing: 4.0,
+          shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: List.generate(_controllers.length, (index) {
             final lang = _languages[index];
@@ -368,106 +370,119 @@ class _TTSHomePageState extends State<TTSHomePage> {
     );
   }
 
-  // 优化的语言卡片，充分利用分配的空间
+  // 简化语言卡片构建方法，使用固定尺寸
   Widget _buildLanguageTile(int index, Map<String, String> lang) {
-    const TextStyle labelTextStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
+    const TextStyle labelTextStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
     
     return Container(
-      padding: const EdgeInsets.all(6), // 合理的padding
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Row( // 保持水平布局但使用更大的组件
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 语言标签
-          Container(
-            width: 70, // 增加宽度以更好利用空间
-            height: 24, // 增加高度
-            decoration: BoxDecoration(
-              color: const Color(0xFFFBBF24),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Center(
-              child: Text(
-                lang['name']!,
-                style: labelTextStyle.copyWith(color: Colors.black),
-                overflow: TextOverflow.ellipsis,
+          // 顶部行：标签 + 播放按钮
+          Row(
+            children: [
+              // 固定宽度的语言标签
+              Container(
+                width: 65, // 固定宽度，避免动态计算
+                height: 22,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFBBF24),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Center(
+                  child: Text(
+                    lang['name']!,
+                    style: labelTextStyle.copyWith(color: Colors.black),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
-            ),
+              const Spacer(),
+              // 播放按钮
+              SizedBox(
+                width: 32,
+                height: 22,
+                child: ElevatedButton(
+                  onPressed: _isInitialized
+                      ? () => _playRowTTS(index, _controllers[index].text, lang['code']!)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    backgroundColor: _rowIsPlaying[index] ? Colors.orange : Colors.blue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  ),
+                  child: Icon(
+                    _rowIsPlaying[index] ? Icons.stop : Icons.play_arrow,
+                    size: 14,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
+          const SizedBox(height: 4),
           // 文本输入框
           Expanded(
             child: TextField(
               controller: _controllers[index],
               decoration: const InputDecoration(
-                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
-              style: const TextStyle(fontSize: 12), // 增加字体大小以更好可读性
+              style: const TextStyle(fontSize: 11),
               maxLines: 1,
-            ),
-          ),
-          const SizedBox(width: 8),
-          // 播放按钮
-          SizedBox(
-            width: 36, // 增加按钮宽度
-            height: 24, // 增加按钮高度
-            child: ElevatedButton(
-              onPressed: _isInitialized
-                  ? () => _playRowTTS(index, _controllers[index].text, lang['code']!)
-                  : null,
-              style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.zero,
-                backgroundColor: _rowIsPlaying[index] ? Colors.orange : Colors.blue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              ),
-              child: Icon(
-                _rowIsPlaying[index] ? Icons.stop : Icons.play_arrow,
-                size: 16, // 增加图标大小
-                color: Colors.white,
-              ),
             ),
           ),
         ],
       ),
     );
   }
+  }
 
   Widget _buildCompactControls() {
     return Container(
-      padding: const EdgeInsets.all(12), // 增加padding充分利用空间
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly, // 均匀分布空间
-        children: [
-        // 语速控制
-        _buildSliderRow('语速', _speechRate, 0.3, 2.0, Icons.speed, (value) async {
-          setState(() => _speechRate = value);
-        }),
-        
-        // 音量控制
-        _buildSliderRow('音量', _volume, 0.0, 1.0, Icons.volume_up, (value) async {
-          setState(() => _volume = value);
-        }),
-        
-        // 音调控制
-        _buildSliderRow('音调', _pitch, 0.5, 2.0, Icons.tune, (value) async {
-          setState(() => _pitch = value);
-        }),
-        ],
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+          // language selection removed — per-row languages are fixed
+          
+          // 语速控制
+          _buildSliderRow('语速', _speechRate, 0.3, 2.0, Icons.speed, (value) async {
+            setState(() => _speechRate = value);
+          }),
+          
+          // 音量控制
+          _buildSliderRow('音量', _volume, 0.0, 1.0, Icons.volume_up, (value) async {
+            setState(() => _volume = value);
+          }),
+          
+          // 音调控制
+          _buildSliderRow('音调', _pitch, 0.5, 2.0, Icons.tune, (value) async {
+            setState(() => _pitch = value);
+          }),
+          ],
+        ),
       ),
     );
   }
@@ -481,40 +496,34 @@ class _TTSHomePageState extends State<TTSHomePage> {
     Function(double) onChanged,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4), // 增加垂直间距
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFFFBBF24), size: 16), // 增加图标大小
-          const SizedBox(width: 8), // 增加间距
+          Icon(icon, color: const Color(0xFFFBBF24), size: 14),
+          const SizedBox(width: 6),
           SizedBox(
-            width: 40, // 增加标签宽度
+            width: 30,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF000000)), // 增加字体
+              style: const TextStyle(fontSize: 10, color: Color(0xFF000000)),
             ),
           ),
           Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 3.0, // 增加轨道高度
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8.0), // 增加拇指大小
-              ),
-              child: Slider(
-                value: value,
-                min: min,
-                max: max,
-                divisions: 20,
-                activeColor: const Color(0xFFFBBF24),
-                onChanged: onChanged,
-              ),
+            child: Slider(
+              value: value,
+              min: min,
+              max: max,
+              divisions: 20,
+              activeColor: const Color(0xFFFBBF24),
+              onChanged: onChanged,
             ),
           ),
           SizedBox(
-            width: 36, // 增加数值显示宽度
+            width: 35,
             child: Text(
               value.toStringAsFixed(1),
               style: const TextStyle(
-                fontSize: 12, // 增加字体
+                fontSize: 11,
                 color: Color(0xFF000000),
                 fontWeight: FontWeight.w500,
               ),
@@ -525,6 +534,8 @@ class _TTSHomePageState extends State<TTSHomePage> {
       ),
     );
   }
+
+  // Removed global play animation and single play button; per-row controls are used.
 
   Widget _buildLoadingCard() {
     return Container(
